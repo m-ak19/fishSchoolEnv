@@ -325,36 +325,69 @@ class fishEnv:
 
         return next_state, reward, done
 
+
     def compute_state(self):
         agent = self.fish_list[self.agent_idx]
         neighbors = []
-        state = []
         Nmax = 10
-        
-        neighbors_count_norm = 0
-        cos_center = 0
-        sin_center = 0
-        cos_align = 0
-        sin_align = 0
-        avg_dist_norm = 1
-        danger = 0
-        
+
+        # --- Variables d'état (initialisation) ---
+        neighbors_count_norm = 0.0
+        cos_center = 0.0
+        sin_center = 0.0
+        cos_align = 0.0
+        sin_align = 0.0
+        avg_dist_norm = 1.0
+        danger = 0.0
+
         mean_x = 0.0
         mean_y = 0.0
-        
         avg_cos = 0.0
         avg_sin = 0.0
-        
         mean_dist = 0.0
-        
-        danger = 0.0
-        
+
         for fish in self.fish_list:
-            if(fish == agent):
+            if fish is agent:
                 continue
-            if(agent.is_in_vision_cone(fish)):
+            if agent.is_in_vision_cone(fish):
                 neighbors.append(fish)
-        if(len(neighbors) == 0):
+
+        if len(neighbors) == 0:
+            center_x = 0.0
+            center_y = 0.0
+            sum_cos = 0.0
+            sum_sin = 0.0
+
+            for fish in self.fish_list:
+                center_x += fish.pos.x
+                center_y += fish.pos.y
+                sum_cos += math.cos(fish.dir.angle)
+                sum_sin += math.sin(fish.dir.angle)
+
+            n_total = len(self.fish_list)
+            center_x /= n_total
+            center_y /= n_total
+            center = Position(center_x, center_y)
+
+            angle_center = agent.pos.get_angle(center)
+            delta_center = shortest_angle_diff(angle_center, agent.dir.angle)
+            cos_center = math.cos(delta_center)
+            sin_center = math.sin(delta_center)
+
+            sum_cos /= n_total
+            sum_sin /= n_total
+            mean_dir = math.atan2(sum_sin, sum_cos)
+            delta_align = shortest_angle_diff(mean_dir, agent.dir.angle)
+            cos_align = math.cos(delta_align)
+            sin_align = math.sin(delta_align)
+
+            dist_center = agent.pos.distance(center)
+            max_dist = math.hypot(self.width, self.height) / 2.0
+            avg_dist_norm = min(1.0, dist_center / max_dist)
+
+            neighbors_count_norm = 0.0
+            danger = 0.0 
+
             state = [
                 neighbors_count_norm,
                 cos_center, sin_center,
@@ -364,11 +397,10 @@ class fishEnv:
             ]
             return np.array(state, dtype=np.float32)
 
-        
         else:
             n = len(neighbors)
             neighbors_count_norm = min(n, Nmax) / Nmax
-            
+
             for fish in neighbors:
                 mean_x += fish.pos.x
                 mean_y += fish.pos.y
@@ -376,26 +408,26 @@ class fishEnv:
                 avg_sin += math.sin(fish.dir.angle)
                 neighbor_distance = agent.pos.distance(fish.pos)
                 mean_dist += neighbor_distance
-                if(neighbor_distance < agent.params.min_distance):
+                if neighbor_distance < agent.params.min_distance:
                     danger = 1.0
-            
+
             mean_x /= n
             mean_y /= n
             angle_center = agent.pos.get_angle(Position(mean_x, mean_y))
             delta = shortest_angle_diff(angle_center, agent.dir.angle)
             cos_center = math.cos(delta)
             sin_center = math.sin(delta)
-            
+
             avg_cos /= n
             avg_sin /= n
             mean_dir = math.atan2(avg_sin, avg_cos)
             delta_align = shortest_angle_diff(mean_dir, agent.dir.angle)
             cos_align = math.cos(delta_align)
             sin_align = math.sin(delta_align)
-            
+
             mean_dist /= n
-            avg_dist_norm = min(1, mean_dist / agent.params.vision_range)
-            
+            avg_dist_norm = min(1.0, mean_dist / agent.params.vision_range)
+
             state = [
                 neighbors_count_norm,
                 cos_center, sin_center,
@@ -403,7 +435,8 @@ class fishEnv:
                 avg_dist_norm,
                 danger
             ]
-        return np.array(state, dtype=np.float32)
+            return np.array(state, dtype=np.float32)
+
 
     def compute_reward(self):
         agent = self.fish_list[self.agent_idx]
