@@ -10,13 +10,13 @@ from rl.rl_utils import select_action, select_action_qvalues
 from utils import draw_fish, show_text, Slider
 
 
-SUP_MODEL_PATH = "supervised_learning/supervised_model.h5"
-supervised_model = load_model(SUP_MODEL_PATH)
 
-q_network = load_model("rl/test_dqn.h5")
+supervised_model = load_model("supervised_learning/supervised_model.h5")
+
+q_network = load_model("rl/dqn.h5")
 
 
-supervised_q_net = load_model("rl/supervised_q_net.h5")
+supervised_q_net = load_model("rl/dqn_classifier.h5")
 
 # ------------------------------------------------------------------
 # Constantes écran
