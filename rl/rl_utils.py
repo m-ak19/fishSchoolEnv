@@ -1,5 +1,4 @@
 import numpy as np
-
 class ReplayBuffer:
     def __init__(self, state_dim, capacity=100_000):
         self.state_dim = state_dim
@@ -65,3 +64,16 @@ def select_action(state, q_network, n_actions, epsilon):
         q_values = q_network(state_input).numpy()[0]  # shape (n_actions,)
         action = int(np.argmax(q_values))
         return action
+
+def select_action_qvalues(state, q_model, n_actions=3, epsilon=0.0):
+    """
+    Pour un modèle qui sort Q(s,a) (Dense(..., activation=None)).
+    - epsilon=0.0 => greedy pur
+    - epsilon>0   => epsilon-greedy (utile si tu veux tester un peu d’explo)
+    """
+    if np.random.rand() < epsilon:
+        return np.random.randint(0, n_actions)
+
+    state_input = state[None, :].astype(np.float32)  # (1, state_dim)
+    q_vals = q_model(state_input).numpy()[0]         # (n_actions,)
+    return int(np.argmax(q_vals))

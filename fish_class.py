@@ -320,10 +320,20 @@ class fishEnv:
         self.timestep += 1
         reward, dist_center_norm = self.compute_reward()
         next_state = self.compute_state()
-        
-        done = (self.timestep >= self.max_steps) or (dist_center_norm > 0.8)
 
-        return next_state, reward, done
+        timeout = (self.timestep >= self.max_steps)
+        failure = (dist_center_norm > 0.8)
+
+        done = timeout or failure
+
+        info = {
+            "timeout": timeout,
+            "failure": failure,
+            "dist_center_norm": dist_center_norm,
+        }
+
+        return next_state, reward, done, info
+
 
 
     def compute_state(self):

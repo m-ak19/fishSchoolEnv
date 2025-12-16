@@ -3,22 +3,20 @@ import numpy as np
 import pygame
 
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
-
 from tensorflow.keras.models import load_model
 
 from fish_class import fishEnv
-from rl.rl_utils import select_action
+from rl.rl_utils import select_action, select_action_qvalues
 from utils import draw_fish, show_text, Slider
 
-# ------------------------------------------------------------------
-# Charger le modèle supervisé (policy réseau, pas le DQN)
-# ------------------------------------------------------------------
+
 SUP_MODEL_PATH = "supervised_learning/supervised_model.h5"
-policy_model = load_model(SUP_MODEL_PATH)
+supervised_model = load_model(SUP_MODEL_PATH)
 
-q_network = load_model("rl/dqn_fish_model.h5")
+q_network = load_model("rl/test_dqn.h5")
 
-print("game_loop_sup")
+
+supervised_q_net = load_model("rl/supervised_q_net.h5")
 
 # ------------------------------------------------------------------
 # Constantes écran
@@ -54,6 +52,9 @@ running = True
 paused  = False
 speed   = 1  # nombre de steps simulés par frame (tu peux le garder si tu veux)
 show_vision_cone = False
+
+mode = 0  # 0: RL DQN, 1: Supervised, 2: Supervised-QNet
+mode_names = ["RL (DQN)", "Supervisé", "DQN-classif (QNet)"]
 
 # ------------------------------------------------------------------
 # Création des sliders dans la zone UI
@@ -140,9 +141,9 @@ while running:
                 speed = max(speed - 1, 1)
             elif event.key == pygame.K_m:
                 # Toggle du mode de contrôle
-                supervised = not supervised
-                mode_name = "Supervisé" if supervised else "RL (DQN)"
-                print(f"[INFO] Changement de mode : {mode_name}")
+                mode = (mode + 1) % 3
+                print(f"[INFO] Mode = {mode_names[mode]}")
+
 
         # events souris => sliders
         for s in sliders.values():
@@ -157,27 +158,30 @@ while running:
 
     # ---------- LOGIQUE : agent supervisé ----------
     if not paused:
-        if supervised:
-            for _ in range(speed):
-                # recalculer l’état à partir de l’env courant
-                state = env.compute_state()        # shape (state_dim,)
 
-                # prédiction softmax + argmax
-                state_input = np.expand_dims(state, axis=0).astype(np.float32)  # (1, state_dim)
-                logits = policy_model(state_input)          # (1, n_actions)
-                probs  = logits.numpy()[0]                  # (n_actions,) si dernière couche = softmax
-                action = int(np.argmax(probs))              # action la plus probable
-
-                # appliquer l’action : on ignore reward et done ici
-                next_state, _, _ = env.step_rl(action)
-                state = next_state
-        else:
+        if mode == 0:
             action = select_action(state, q_network, n_actions=3, epsilon=epsilon_eval)
-            next_state, reward, done = env.step_rl(action)
+            next_state, reward, done, info = env.step_rl(action)
             state = next_state
-            # if done:
-            #     state = env.reset_rl()
-            #     reset_timer = 180
+            if done:
+                state = env.reset_rl()
+                reset_timer = 180
+
+        elif mode == 1:
+            state = env.compute_state()
+            state_input = np.expand_dims(state, axis=0).astype(np.float32)
+            probs = supervised_model(state_input).numpy()[0]   # softmax
+            action = int(np.argmax(probs))
+            next_state, reward, done, info = env.step_rl(action)
+            state = next_state
+            # tu peux reset si done si tu veux comparer pareil
+
+        elif mode == 2:
+            state = env.compute_state()
+            action = select_action_qvalues(state, supervised_q_net, n_actions=3, epsilon=0.0)
+            next_state, reward, done, info = env.step_rl(action)
+            state = next_state
+            # reset pareil si done
 
     # ---------- RENDU ----------
     screen.fill(bg_color)
@@ -206,7 +210,7 @@ while running:
     show_text(f"UP/DOWN: speed = {speed}", (10, HEIGHT - 80), screen, font, font_color)
     show_text(f"Poissons: {n_fish}", (10, HEIGHT - 100), screen, font, font_color)
     
-    mode_text = "Mode: Supervisé (M pour changer)" if supervised else "Mode: RL (DQN) (M pour changer)"
+    mode_text = f"Mode: {mode_names[mode]} (M pour changer)"
     show_text(mode_text, (SIM_WIDTH + 20, HEIGHT - 80), screen, font, font_color)
 
     show_text(
